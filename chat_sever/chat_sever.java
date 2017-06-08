@@ -11,15 +11,17 @@ public class chat_sever {
                     ServerSocket server = new ServerSocket(10001);
                     System.out.println("-------------Sever init-------------.");
                     System.out.println("Sever IP : " + InetAddress.getLocalHost().getHostAddress());
-                    // member의 id를 key로, outputstream을 value로 가지는 hash map
-                    HashMap member = new HashMap();
-                    // 각 채팅방의 id를 key로, 속한 채팅방 id을 value로 가지고 있는 hash map.
+                    
+                    // 각 채팅방의 id를 key로, 속한 채팅방 hashmap을 value로 가지고 있는 hash map.
                     // 다중채팅방을 구현하기 위해 사용.
                     HashMap chat_room = new HashMap();
+                    // member의 id를 key로, outputstream을 value로 가지는 hash map
+                    HashMap open_chat = new HashMap();
+                    chat_room.put("open_chat",open_chat);
                     // client로 연결을 수용하는것을 영원히 반복
                     while(true){
                            Socket sock = server.accept();
-                           ChatThread client = new ChatThread(sock,member, chat_room);
+                           ChatThread client = new ChatThread(sock, chat_room, open_chat);
                            client.start();
                     }
              }catch(Exception e){
@@ -33,16 +35,16 @@ class ChatThread extends Thread{
        private String client_ID;     // 이 Client의 ID
        private BufferedReader client_BR;  // 이 client의 bufferedreader
        private PrintWriter client_PW;     // 이 client의 printwriter
-       private HashMap hm;    // 현재 접속중인 멤버의 Hash map, key : ID, value : outputstream
+       private HashMap cur_chat_room;    // 현재 접속중인 멤버의 Hash map, key : ID, value : outputstream
        private HashMap chat_room;   // key : client_ID, value : chat_room_ID
        private boolean initFlag = false;  // client에서 연결을 종료했는지 확인하기 위한 변수
        private InetAddress client_IP;   // Client의 inetaddress 구조체
 
        // 생성자
-       public ChatThread(Socket sock, HashMap hm, HashMap chat_room){
+       public ChatThread(Socket sock, HashMap chat_room, HashMap open_chat){
 
              this.sock = sock;
-             this.hm = hm;
+             this.cur_chat_room = open_chat;
              this.chat_room = chat_room;
              this.client_IP = sock.getInetAddress();
 
@@ -65,15 +67,14 @@ class ChatThread extends Thread{
                     client_PW.flush();
                     help_menu();
                    
-                    synchronized(chat_room) {
-                          chat_room.put(this.client_ID, "Open_room");
+                    
+                    synchronized(cur_chat_room){
+                           cur_chat_room.put(this.client_ID, client_PW);
                     }
-                    synchronized(hm){
-                           hm.put(this.client_ID, client_PW);
-                    }
+
                     initFlag = true;
              }catch(Exception ex){
-             System.out.println(ex);
+                  System.out.println(ex);
              }
        }
  
@@ -88,12 +89,14 @@ class ChatThread extends Thread{
                                  break;
                            else if(line.indexOf("/to") == 0){
                                  sendmsg(line);
-                           } else if (line.indexOf("/mem list") == 0) {
+                           } else if (line.indexOf("/list mem") == 0) {
                                  mem_list();
                            } else if (line.indexOf("/help") == 0) {
                                  help_menu();
-                           } else if (line.indexOf("/chat list") == 0) {
+                           } else if (line.indexOf("/list chat") == 0) {
                                  chat_list();
+                           } else if (line.indexOf("/make room") == 0) {
+                                 make_chat_room();
                            } else {
                                  broadcast(client_ID + " : " + line,client_ID);
                            }
@@ -102,8 +105,8 @@ class ChatThread extends Thread{
                     System.out.println(e);
              }finally{
                     // client가 접속을 종료하면 hashmap에서 삭제
-                    synchronized(hm){
-                           hm.remove(client_ID);
+                    synchronized(cur_chat_room){
+                        cur_chat_room.remove(client_ID);
                     }
                     broadcast(client_ID+" 님이 접속 종료했습니다.",null);
                     System.out.println(client_ID + "회원이 접속을 종료했습니다.");
@@ -114,7 +117,8 @@ class ChatThread extends Thread{
                     }catch(Exception ex){}
              }
        }
-      
+       
+       // 현재 귓속말 보내기 기능은 같은 채팅방에 있을때만 상정하여 구현하는중. 나중에 전체 회원들 중 고를 수 있게 수정해야 함
        public void sendmsg(String msg){
              int start = msg.indexOf(" ") +1;
              int end = msg.indexOf(" ", start);
@@ -122,11 +126,11 @@ class ChatThread extends Thread{
              if(end != -1){
                     String to = msg.substring(start, end);
                     String msg2 = msg.substring(end+1);
-                    Object obj = hm.get(to);
+                    Object obj = cur_chat_room.get(to);
                     if(obj != null){
-                           PrintWriter pw = (PrintWriter)obj;
-                           pw.println(client_ID + "님이 다음의 귓속말을 보내셨습니다. :" +msg2);
-                           pw.flush();
+                           PrintWriter to_PrintWriter = (PrintWriter)obj;
+                           to_PrintWriter.println(client_ID + "님이 다음의 귓속말을 보내셨습니다. :" +msg2);
+                           to_PrintWriter.flush();
                     }
              }
        }
@@ -134,59 +138,75 @@ class ChatThread extends Thread{
 
        // 현재 id에 출력을 원하지 않을 경우를 제외하기 위해 except_id 추가
        public void broadcast(String msg, String except_id){
-                    synchronized(hm){
-                           Collection collection = hm.values();
+            synchronized(cur_chat_room){
+                  Collection collection = cur_chat_room.values();
                            
-                           Iterator iter = collection.iterator();
-                           while(iter.hasNext()){
-                                 PrintWriter pw = (PrintWriter)iter.next();
-                                 if(except_id != null) {
-                                    if(hm.get(except_id) != pw) {
-                                          pw.println(msg);
-                                          pw.flush();
-                                    }
-                                 }  
-                           }
-                    }
-             }
+                  Iterator iter = collection.iterator();
+                  while(iter.hasNext()){
+                        PrintWriter cur_PrintWriter = (PrintWriter)iter.next();
+                        if(except_id != null) {
+                              if(cur_chat_room.get(except_id) != cur_PrintWriter) {
+                                    cur_PrintWriter.println(msg);
+                                    cur_PrintWriter.flush();
+                              }
+                        }  
+                  }
+            }
+      }
 
       // 접속중인 모든 사용자의 list를 출력 ( 자기 자신 빼고 )
+      // 현재 채팅방에서만 or 전체 접속자
       public void mem_list() {
-            synchronized(hm) {
-                  Set id_set = hm.keySet();
+            synchronized(chat_room) {
+                  Set id_set = cur_chat_room.keySet();
                   Iterator iter = id_set.iterator();
-                  Object obj = hm.get(client_ID);
-                  PrintWriter pw = (PrintWriter)obj;
-                  pw.println("------------online member-----------");
+                  client_PW.println("------------online member-----------");
                   while(iter.hasNext()) {
                         String mem_id = (String)iter.next();
                         if(mem_id != client_ID) {
-                              pw.println(mem_id);
+                              client_PW.println(mem_id);
                         }
                   }
-                  pw.flush();
+                  client_PW.flush();
             }
       }
 
       public void chat_list() {
 
-                  synchronized(chat_room) {
-                        Collection chat_room_collection = chat_room.values();
-                        Iterator iter = chat_room_collection.iterator();
-                        Set unique_room = new HashSet();
-                        while(iter.hasNext()) {
-                              unique_room.add(iter.next());
-                        }
-                        iter = unique_room.iterator();
+            synchronized(chat_room) {
+                  Set chat_room_set = chat_room.keySet();
+                  Iterator iter = chat_room_set.iterator();
 
-                        PrintWriter pw = (PrintWriter)obj;
-                        client_PW.println("------------Chat Room List-----------");
-                        while(iter.hasNext()) {
-                              String room_id = (String)iter.next();
-                              client_PW.println(room_id);
-                        }
-                        client_PW.flush();
+                  client_PW.println("------------Chat Room List-----------");
+                  while(iter.hasNext()) {
+                        client_PW.println(iter.next());
                   }
+                  client_PW.flush();
+            }
+      }
+      
+      public void make_chat_room() {
+            client_PW.println("------------make new chat-------------");
+            client_PW.println("Enter chat name : ");
+            client_PW.flush();
+            String line = null;
+            HashMap new_chat = new HashMap();
+            try {
+                  line = client_BR.readLine();
+                  synchronized(chat_room) {
+                        chat_room.put(line, new_chat);
+                  }
+                  synchronized(cur_chat_room) {
+                        cur_chat_room.remove(client_ID);
+                  }
+                  String msg = client_ID + "님이 퇴장하셨습니다";
+                  broadcast(msg, null);
+                  synchronized(new_chat) {
+                        new_chat.put(client_ID,client_PW);
+                  }
+                  cur_chat_room = new_chat;
+            } catch (Exception e) { System.out.println(e); }
+            
 
       }
       public void file_trans() {
@@ -195,8 +215,8 @@ class ChatThread extends Thread{
 
       public void help_menu() {
             client_PW.println("-------------command-------------");
-            client_PW.println("/mem list");
-            client_PW.println("/chat list");
+            client_PW.println("/list <mem/chat>  <current/whole>");
+            client_PW.println("/make room");
             client_PW.println("/to <mem_id> <message>");
             client_PW.println("/file");
             client_PW.println("/quit");
