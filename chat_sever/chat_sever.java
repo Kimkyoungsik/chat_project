@@ -39,7 +39,7 @@ class ChatThread extends Thread{
        private HashMap chat_room;   // key : client_ID, value : chat_room_ID
        private boolean initFlag = false;  // client에서 연결을 종료했는지 확인하기 위한 변수
        private InetAddress client_IP;   // Client의 inetaddress 구조체
-
+       FileWriter fw;
        // 생성자
        public ChatThread(Socket sock, HashMap chat_room, HashMap open_chat){
 
@@ -99,6 +99,13 @@ class ChatThread extends Thread{
                                  make_chat_room();
                            } else {
                                  broadcast(client_ID + " : " + line,client_ID);
+                                 try{
+                                  fw=new FileWriter(filepath);
+                                  fw.write(line);
+                                  fw.close;
+                                 }catch(Exception e){}
+                                  
+                                  
                            }
                     }
              }catch(Exception e){
@@ -222,5 +229,22 @@ class ChatThread extends Thread{
             client_PW.println("/quit");
             client_PW.flush();
       }
+     public void save_chat(){
+      setpath();
       
+      
+     }
+     public void setpath()
+     {
+      int Calendar cal=Calendar.getinstance();
+      int month=cal.get(Calendar.MONTH)+1;
+      int date=cal.get(Calendar.DATE);
+      int hour=cal.get(Calendar.HOUR_OF_DAY);
+      int minute=cal.get(Calendar.MINUTE);
+      String filename=String.format("%2d%2d_%2d%2d",month,dat,hour,minute);
+      String filepath=String.format("C:\Users\Administrator\workspace\%s.txt",filename);
+     }
+     
+      
+  
 }
