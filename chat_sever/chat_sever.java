@@ -344,9 +344,16 @@ class ClientThread extends Thread{
             client_PW.println("Enter chat name : ");
             client_PW.flush();
             String line = null;
+            String ad=null;
             HashMap new_chat = new HashMap();
             try {
                   line = client_BR.readLine();
+                  ad=setpath(line);
+                   try{
+                	  File file = new File(ad);
+                	  fw=new FileWriter(file,true);
+                	  fw.close();
+                  }catch(Exception e){System.out.println(e);}
                   synchronized(chat_room) {
                         chat_room.put(line, new_chat);
                   }
@@ -409,6 +416,42 @@ class ClientThread extends Thread{
             client_PW.println("/quit");
             client_PW.println();
             client_PW.flush();
+      }
+ 
+ public String setpath(String filename){
+    	  this.filename=filename;
+    	  filename=String.format("%s",filename);
+    	  filepath=String.format("C:\\%s.txt",filename);
+    	  return filepath;
+      }
+      
+ public void savechat(String filename,String msg){
+    	  this.filename=filename;
+    	  String line=msg;
+    	  msg.replaceAll("\n", "\r\n");
+    	  filepath=String.format("C:\\%s.txt",filename);
+    	  try{
+    		  fw=new FileWriter(filepath);
+    		  fw.write(line);
+    		  fw.close();
+    	  }catch(Exception e){}
+      }
+      
+ public void readchat(String filename){
+    	  this.filename=filename;
+    	  filepath=String.format("C:\\%s.txt",filename);
+    	  
+    	  try{
+    		  fr=new FileReader(filepath);
+        	  BufferedReader b=new BufferedReader(fr);
+        	  String line;
+        	  while((line=b.readLine())!=null){
+        		  client_PW.println(line);
+        	  }
+        	  b.close();
+    	  }catch(Exception e){}
+    	  
+    	  
       }
 
       public static void clearScreen(PrintWriter pw) {  
