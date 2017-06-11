@@ -35,11 +35,11 @@ public class chat_client{
                      ******************************************************************/                  
                     BufferedReader keyboard = new BufferedReader(new InputStreamReader(System.in));
                    
-                    System.out.print("Enter your ID : ");
+                    /*System.out.print("Enter your ID : ");
                     id = sc.next();
                     // 사용자의 id를 서버로 전송한다
                     pw.println(id);
-                    pw.flush();
+                    pw.flush();*/
                    
                     InputThread it = new InputThread(sock, br);
                     it.start();
