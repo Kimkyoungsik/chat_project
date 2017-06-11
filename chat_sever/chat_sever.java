@@ -137,21 +137,23 @@ class ClientThread extends Thread{
                     // client의 bufferedreader에서 한줄씩 받아옴
                     while((line = client_BR.readLine())!= null){
                            // 명령어를 입력했는지 체크
-                           if(line.equals("/quit"))
-                                 break;
-                           else if(line.indexOf("/to") == 0){
-                                 sendmsg(line);
-                           } else if (line.indexOf("/list mem") == 0) {
-                                 mem_list();
-                           } else if (line.indexOf("/help") == 0) {
-                                 help_menu();
-                           } else if (line.indexOf("/list chat") == 0) {
-                                 chat_list();
-                           } else if (line.indexOf("/make room") == 0) {
-                                 make_chat_room();
-                           } else {
-                                 broadcast(client_ID + " : " + line,client_ID);
-                           }
+                        if(line.equals("/quit"))
+                              break;
+                        else if(line.indexOf("/to") == 0){
+                              sendmsg(line);
+                        } else if (line.indexOf("/list mem") == 0) {
+                              mem_list();
+                        } else if (line.indexOf("/help") == 0) {
+                              help_menu();
+                        } else if (line.indexOf("/list chat") == 0) {
+                              chat_list();
+                        } else if (line.indexOf("/make room") == 0) {
+                              make_chat_room();
+                        } else if (line.indexOf("/enter") == 0) {
+                              enter_chat_room(line);
+                        } else {
+                              broadcast(client_ID + " : " + line,client_ID);
+                        }
                     }
              }catch(Exception e){
                     System.out.println(e);
@@ -235,6 +237,7 @@ class ClientThread extends Thread{
                                     System.out.println("IP : " + client_IP.getHostAddress());
                                     client_PW.flush();
                                     help_menu();
+                                    
 
                   } else {
                         clearScreen(client_PW);
@@ -249,26 +252,43 @@ class ClientThread extends Thread{
 
        }
        
-       // 현재 귓속말 보내기 기능은 같은 채팅방에 있을때만 상정하여 구현하는중. 나중에 전체 회원들 중 고를 수 있게 수정해야 함
+       // 채팅방에 상관없이 보낼 수 있게 수정완료
        public void sendmsg(String msg){
-             int start = msg.indexOf(" ") +1;
-             int end = msg.indexOf(" ", start);
+            int start = msg.indexOf(" ") +1;
+            int end = msg.indexOf(" ", start);
             
-             if(end != -1){
-                    String to = msg.substring(start, end);
-                    String msg2 = msg.substring(end+1);
-                    Object obj = cur_chat_room.get(to);
-                    if(obj != null){
-                           PrintWriter to_PrintWriter = (PrintWriter)obj;
-                           to_PrintWriter.println(client_ID + "님이 다음의 귓속말을 보내셨습니다. :" +msg2);
-                           to_PrintWriter.flush();
-                    }
-             }
+            String to = msg.substring(start, end);
+            String msg2 = msg.substring(end+1);
+
+            HashMap cur_hash = null;
+            PrintWriter to_PW = null;
+
+            try{
+                  synchronized ( chat_room) {
+                        Iterator chat_hash = chat_room.values().iterator();
+                        while(chat_hash.hasNext()) {
+                              cur_hash = (HashMap)chat_hash.next();
+                              if(cur_hash.containsKey(to)) {
+                                    to_PW = (PrintWriter)cur_hash.get(to);
+                                    break;
+                              }
+                        }
+                  }
+                  
+                  if(to_PW != null){
+                        to_PW.println(client_ID + "님이 다음의 귓속말을 보내셨습니다. :" +msg2);
+                        to_PW.flush();
+                  }
+            } catch (Exception e) {
+                  System.out.println(e);
+            }
+            
+            
        }
 
 
        // 현재 id에 출력을 원하지 않을 경우를 제외하기 위해 except_id 추가
-       public void broadcast(String msg, String except_id){
+      public void broadcast(String msg, String except_id){
             synchronized(cur_chat_room){
                   Collection collection = cur_chat_room.values();
                            
@@ -286,7 +306,7 @@ class ClientThread extends Thread{
       }
 
       // 접속중인 모든 사용자의 list를 출력 ( 자기 자신 빼고 )
-      // 현재 채팅방에서만 or 전체 접속자
+      // 현재 채팅방에서만
       public void mem_list() {
             synchronized(chat_room) {
                   Set id_set = cur_chat_room.keySet();
@@ -339,9 +359,40 @@ class ClientThread extends Thread{
                         new_chat.put(client_ID,client_PW);
                   }
                   cur_chat_room = new_chat;
+
+                  clearScreen(client_PW);
+                  client_PW.println("Entered to " + line);
+                  client_PW.flush();
             } catch (Exception e) { System.out.println(e); }
             
 
+      }
+
+      public void enter_chat_room(String line) {
+            int start = line.indexOf(" ") +1;
+            String chat_name = line.substring(start);
+            HashMap new_chat_room = null;
+
+            try{
+                  if(chat_room.containsKey(chat_name)) {
+                        
+                        synchronized(chat_room) {
+                              cur_chat_room.remove(client_ID);
+                              new_chat_room = (HashMap)chat_room.get(chat_name);
+                              cur_chat_room = new_chat_room;
+                              new_chat_room.put(client_ID,client_PW);
+                        }
+                        
+                        clearScreen(client_PW);
+                        client_PW.println("Entered to " + chat_name);
+                        client_PW.flush();
+                  } else {
+                        client_PW.println("Invalid chat room");
+                        client_PW.flush();
+                  }
+            } catch (Exception e) {
+                  client_PW.println(e);
+            }
       }
       public void file_trans() {
 
@@ -356,6 +407,7 @@ class ClientThread extends Thread{
             client_PW.println("/to <mem_id> <message>");
             client_PW.println("/file");
             client_PW.println("/quit");
+            client_PW.println();
             client_PW.flush();
       }
 
